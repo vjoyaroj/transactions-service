@@ -1,0 +1,343 @@
+openapi: 3.0.3
+info:
+  title: Transactions API
+  description: Microservicio de gestión de transacciones
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8084/api/v1
+
+paths:
+
+  /transactions:
+    get:
+      summary: Obtener todas las transacciones
+      operationId: getTransactions
+      responses:
+        '200':
+          description: Lista de transacciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionResponse'
+
+    post:
+      summary: Registrar una transacción (depósito, retiro, pago, consumo)
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+      responses:
+        '201':
+          description: Transacción registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Solicitud inválida
+        '422':
+          description: Regla de negocio no cumplida
+
+  /transactions/{id}:
+    get:
+      summary: Obtener transacción por ID
+      operationId: getTransactionById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transacción encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          description: Transacción no encontrada
+
+    put:
+      summary: Actualizar transacción
+      operationId: updateTransaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+      responses:
+        '200':
+          description: Transacción actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          description: Transacción no encontrada
+
+    delete:
+      summary: Eliminar transacción
+      operationId: deleteTransaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Transacción eliminada
+
+  /transactions/product/{productId}:
+    get:
+      summary: Obtener todas las transacciones de un producto
+      operationId: getTransactionsByProduct
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de transacciones del producto
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionResponse'
+
+  /transactions/transfer:
+    post:
+      summary: Realizar una transferencia bancaria entre cuentas
+      description: |
+        Permite transferencias entre cuentas del mismo cliente o a cuentas
+        de terceros del mismo banco. Se registran dos movimientos: un retiro
+        en la cuenta origen y un depósito en la cuenta destino.
+      operationId: transferFunds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '201':
+          description: Transferencia realizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '400':
+          description: Solicitud inválida
+        '422':
+          description: Saldo insuficiente o cuenta no disponible
+
+  /reports/movements/{productId}:
+    get:
+      summary: Reporte de los últimos 10 movimientos de una tarjeta de débito o crédito
+      operationId: generateMovementsReport
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID del producto (cuenta de débito o crédito)
+        - name: cardType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - DEBIT
+              - CREDIT
+          description: Tipo de tarjeta para encabezado del reporte
+      responses:
+        '200':
+          description: Reporte PDF generado exitosamente
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Producto no encontrado
+
+components:
+
+  schemas:
+
+    TransactionRequest:
+      type: object
+      required:
+        - payerCustomerId
+        - productId
+        - productType
+        - transactionType
+        - amount
+      properties:
+
+        customerId:
+          type: string
+          deprecated: true
+          description: |
+            (Deprecado) Use payerCustomerId. Se mantiene por compatibilidad con clientes antiguos.
+
+        payerCustomerId:
+          type: string
+          description: ID del cliente que realiza/paga la transacción (puede ser un tercero)
+
+        productId:
+          type: string
+          description: ID de la cuenta o crédito
+
+        productType:
+          type: string
+          enum:
+            - ACCOUNT
+            - CREDIT
+            - CARD
+            - DEBIT_CARD
+
+        transactionType:
+          type: string
+          enum:
+            - DEPOSIT
+            - WITHDRAWAL
+            - PAYMENT
+            - CONSUMPTION
+            - TRANSFER
+
+        amount:
+          type: number
+          format: double
+
+        fee:
+          type: number
+          format: double
+          description: Comisión aplicada (calculada automáticamente si aplica)
+
+        fundingSource:
+          $ref: '#/components/schemas/FundingSource'
+
+        description:
+          type: string
+
+    TransactionResponse:
+      allOf:
+        - $ref: '#/components/schemas/TransactionRequest'
+        - type: object
+          properties:
+
+            id:
+              type: string
+
+            transactionDate:
+              type: string
+              format: date-time
+
+    TransferRequest:
+      type: object
+      required:
+        - customerId
+        - sourceAccountId
+        - targetAccountId
+        - amount
+      properties:
+
+        customerId:
+          type: string
+          description: ID del cliente que realiza la transferencia
+
+        sourceAccountId:
+          type: string
+          description: ID de la cuenta de origen
+
+        targetAccountId:
+          type: string
+          description: ID de la cuenta de destino (mismo cliente o tercero del mismo banco)
+
+        amount:
+          type: number
+          format: double
+          description: Monto a transferir
+
+        description:
+          type: string
+          description: Descripción o concepto de la transferencia
+
+    TransferResponse:
+      type: object
+      properties:
+
+        withdrawalTransactionId:
+          type: string
+          description: ID de la transacción de retiro en cuenta origen
+
+        depositTransactionId:
+          type: string
+          description: ID de la transacción de depósito en cuenta destino
+
+        sourceAccountId:
+          type: string
+
+        targetAccountId:
+          type: string
+
+        amount:
+          type: number
+          format: double
+
+        sourceFee:
+          type: number
+          format: double
+          description: Comisión aplicada en cuenta origen (si excedió el límite de transacciones gratuitas)
+
+        sourceBalanceAfter:
+          type: number
+          format: double
+          description: Saldo resultante en la cuenta origen
+
+        targetBalanceAfter:
+          type: number
+          format: double
+          description: Saldo resultante en la cuenta destino
+
+        transferDate:
+          type: string
+          format: date-time
+
+    FundingSource:
+      type: object
+      description: Origen de fondos para la transacción (especialmente para pagos)
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - ACCOUNT
+            - DEBIT_CARD
+            - CASH
+        accountId:
+          type: string
+          description: Requerido cuando type=ACCOUNT
+        debitCardId:
+          type: string
+          description: Requerido cuando type=DEBIT_CARD
