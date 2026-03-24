@@ -13,6 +13,9 @@ Microservicio de transacciones financieras, transferencias y reportes de movimie
 - `POST /api/v1/transactions/transfer`
 - `GET /api/v1/reports/movements/{productId}`
 
+## Nota
+El `docker-compose.yml` del entorno esta en (`yanki-service`).
+
 ## Proyectos relacionados
 - https://github.com/vjoyaroj/bank-config-repo
 - https://github.com/vjoyaroj/microservices-config
